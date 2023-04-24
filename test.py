@@ -1,20 +1,33 @@
-import nidaqmx
-from nidaqmx.constants import LineGrouping
+import tkinter
+from pylablib.devices import IMAQ
+import numpy as np
+from PIL import Image, ImageTk
 
+camera = IMAQ.IMAQCamera('img0.iid')
+camera.start_acquisition()
+class App(tkinter.Tk):
+    def __init__(self):
+        tkinter.Tk.__init__(self)
+        self.label = tkinter.Label(text="your image here", compound="top")
+        self.label.pack(side="top", padx=8, pady=8)
+        self.iteration=0
+        self.delay=10
+        self.UpdateImage(self.delay)
 
-with nidaqmx.Task() as task:
-    task.do_channels.add_do_chan(
-        "Dev1/port0/line0:3", line_grouping=LineGrouping.CHAN_FOR_ALL_LINES
-    )
+    def UpdateImage(self, delay, event=None):
+        self.iteration += 1
+        self.image = self.get_image()
+        self.label.configure(image=self.image, text="Iteration %s" % self.iteration)
+        self.after(delay, self.UpdateImage, delay)
 
-    try:
-        print("N Lines 1 Sample Boolean Write (Error Expected): ")
-        print(task.write([True, False, True, False]))
-    except nidaqmx.DaqError as e:
-        print(e)
+    def get_image(self):
+        # data =  np.mean(camera.read_multiple_images(),axis=0)
+        data =  camera.read_multiple_images()[0]
+        # data = data-np.min(data)
+        data = data/20
+        image =  ImageTk.PhotoImage(image=Image.fromarray(data))
+        return image
 
-    print("1 Channel N Lines 1 Sample Unsigned Integer Write: ")
-    print(task.write(8))
-
-    print("1 Channel N Lines N Samples Unsigned Integer Write: ")
-    print(task.write([1, 2, 4, 8], auto_start=True))
+if __name__ == "__main__":
+    app=App()
+    app.mainloop()

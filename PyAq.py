@@ -87,7 +87,6 @@ class PyAq:
     def session_clean_up(self):
         self.camera.stop_acquisition()
         self.camera.close()
-        pickle.save(self.dir )
 
     def acquire_image(self):
         frames = [None]*self.stim_frames
@@ -113,4 +112,5 @@ class PyAq:
             self.data[self.traili] = frames
             self.plot_trial_result(frames[0])
         self.session_clean_up()
+        self.trial_clean_up()
         print('done')
