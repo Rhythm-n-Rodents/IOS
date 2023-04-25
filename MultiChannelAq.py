@@ -1,4 +1,4 @@
-
+import pdb
 import time
 import threading
 import numpy as np
@@ -6,11 +6,17 @@ import threading
 import nidaqmx
 import pickle 
 from pylablib.devices import IMAQ
-import matplotlib.pyplot as plt
 from scipy import signal
+from DAQGUI import DAQGUI
 
 def snap_frame(camera,frames,i):
     frames[i] = np.mean(camera.read_multiple_images(),axis=0)
+
+def get_image(camera):
+    data =  np.mean(camera.read_multiple_images(),axis=0)
+    data = data-np.min(data)
+    data = data/np.max(data)*255
+    return data
 
 defalut_settings = {}
 defalut_settings['prestim_frames']=10
@@ -22,11 +28,22 @@ defalut_settings['stimHZ']=10
 defalut_settings['output_rate']=2000
 defalut_settings['n_channels'] = 3
 
-
-class PyAq:
-    def __init__(self,settings):
+class MultiChannelAq:
+    def __init__(self,settings = defalut_settings):
         self.camera = IMAQ.IMAQCamera('img0.iid')
         self.camera.start_acquisition()
+        self.gui = DAQGUI()
+        self.load_settings(settings)
+        self.triali = 1
+        self.stop=False
+        self.data = {}
+        self.dir = r'C:\Users\dklab\Desktop\save_location'
+        time.sleep(0.5)
+        image = get_image(self.camera)
+        self.gui.add_image(image)
+        self.gui.main(self.start_experiment,self.stop_experiment)
+        
+    def load_settings(self,settings):
         self.prestim_frames = settings['prestim_frames']
         self.stim_frames = settings['stim_frames']
         self.poststim_frames = settings['poststim_frames']
@@ -38,22 +55,9 @@ class PyAq:
         self.StimV = settings['StimV']
         self.stimHZ = settings['stimHZ']
         self.output_rate= settings['output_rate']
-        self.traili = 1
-        self.stop=False
-        starting_frame = [None]
-        self.data = {}
-        self.dir = r'C:\Users\dklab\Desktop\save_location'
-        time.sleep(0.5)
-        snap_frame(self.camera,starting_frame,0)
-        self.plot_trial_result(starting_frame[0])
-        
-
+    
     def plot_trial_result(self,result):
-        plt.imshow(result)
-        plt.title(f'Trial {self.traili}')
-        plt.draw()
-        plt.show(block=False)
-        plt.pause(0.01)
+        self.gui.update_image(result,f'Trial {self.triali}')
 
     def monitor(self):
         starting_frame = [None]
@@ -100,20 +104,24 @@ class PyAq:
                 threadi = i-self.prestim_frames-1
                 threads[threadi] = threading.Thread(target=snap_frame,args = [self.camera,frames,threadi])
                 threads[threadi].start()
+            self.gui.update_frame_label(i)
             time.sleep(self.binduration)
-            print(i)
         for threadi in threads:
             threadi.join()
         return frames
+    
+    def stop_experiment(self):
+        self.stop = True
 
-    def start(self):
+    def start_experiment(self):
         print('trial started')
         while ~self.stop:
             self.start_stimuli()
             frames = self.acquire_image()
             self.trial_clean_up()
-            self.traili = self.traili+1
-            self.data[self.traili] = frames
+            self.triali = self.triali+1
+            self.data[self.triali] = frames
             self.plot_trial_result(frames[0])
+            time.sleep(1)
         self.session_clean_up()
         print('done')
